@@ -1,0 +1,188 @@
+import tkinter as tk
+import random
+WIDTH, HEIGHT = 15, 15
+CELL_SIZE = 40
+
+
+def generate_maze(w, h):
+    maze = [[1] * w for _ in range(h)]
+    stack = [(1, 1)]
+    maze[1][1] = 0
+
+    while stack:
+        cx, cy = stack[-1]
+        neighbors = []
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
+            nx, ny = cx + dx, cy + dy
+            if 0 < nx < w - 1 and 0 < ny < h - 1 and maze[ny][nx] == 1:
+                neighbors.append((nx, ny))
+
+        if neighbors:
+            nx, ny = random.choice(neighbors)
+            maze[cy + (ny - cy) // 2][cx + (nx - cx) // 2] = 0
+            maze[ny][nx] = 0
+            stack.append((nx, ny))
+        else:
+            stack.pop()
+
+    return maze
+
+
+class CockroachMaze:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Таракан в лабиринте")
+
+        
+        self.is_running = False
+        self.after_id = None
+
+        
+        self.canvas = tk.Canvas(root, width=WIDTH * CELL_SIZE, height=HEIGHT * CELL_SIZE, bg="#2c3e50")
+        self.canvas.pack()
+
+        
+        self.controls_frame = tk.Frame(root)
+        self.controls_frame.pack(fill=tk.X, pady=10)
+
+        
+        self.start_btn = tk.Button(
+            self.controls_frame, text="Старт", font=("Arial", 12, "bold"),
+            bg="#2ecc71", fg="white", width=12, command=self.start_game
+        )
+        self.start_btn.pack(side=tk.LEFT, padx=20)
+
+        
+        self.reset_btn = tk.Button(
+            self.controls_frame, text="Сгенерировать заново", font=("Arial", 12),
+            bg="#3498db", fg="white", width=20, command=self.reset_game
+        )
+        self.reset_btn.pack(side=tk.RIGHT, padx=20)
+
+        
+        self.reset_game()
+
+    def reset_game(self):
+        
+        if self.after_id:
+            self.root.after_cancel(self.after_id)
+            self.after_id = None
+
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL, text="Старт", bg="#2ecc71")
+
+        
+        self.canvas.delete("all")
+
+        
+        self.maze = generate_maze(WIDTH, HEIGHT)
+
+        
+        self.rx, self.ry = 1, 1
+        self.exit_x, self.exit_y = WIDTH - 2, HEIGHT - 2
+        self.maze[self.exit_y][self.exit_x] = 0
+
+        
+        self.direction = 1
+
+        
+        self.draw_maze()
+        self.draw_bug()
+
+    def start_game(self):
+        
+        if not self.is_running:
+            self.is_running = True
+            self.start_btn.config(state=tk.DISABLED, text="Ищет...", bg="#7f8c8d")
+            self.move_bug()
+
+    def draw_maze(self):
+        
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                x1, y1 = x * CELL_SIZE, y * CELL_SIZE
+                x2, y2 = x1 + CELL_SIZE, y1 + CELL_SIZE
+
+                if self.maze[y][x] == 1:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill="#34495e", outline="#2c3e50")
+                elif x == self.exit_x and y == self.exit_y:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill="#2ecc71", outline="")
+
+    def draw_bug(self):
+        
+        x1 = self.rx * CELL_SIZE + 8
+        y1 = self.ry * CELL_SIZE + 8
+        x2 = x1 + CELL_SIZE - 16
+        y2 = y1 + CELL_SIZE - 16
+        self.bug_id = self.canvas.create_oval(x1, y1, x2, y2, fill="#d35400", outline="#a04000", width=2)
+
+    def leave_trace(self, x, y):
+        
+        cx = x * CELL_SIZE + CELL_SIZE // 2
+        cy = y * CELL_SIZE + CELL_SIZE // 2
+        radius = 4
+        self.canvas.create_oval(
+            cx - radius, cy - radius, cx + radius, cy + radius,
+            fill="#f1c40f", outline="", tag="trace"
+        )
+        self.canvas.tag_raise(self.bug_id)
+
+    def get_coords(self, x, y, direction):
+        
+        moves = [(0, -1), (1, 0), (0, 1), (-1, 0)]  # Вверх, Вправо, Вниз, Влево
+        dx, dy = moves[direction]
+        return x + dx, y + dy
+
+    def move_bug(self):
+        
+        if not self.is_running:
+            return
+
+        
+        self.leave_trace(self.rx, self.ry)
+
+        
+        if self.rx == self.exit_x and self.ry == self.exit_y:
+            self.is_running = False
+            cx = WIDTH * CELL_SIZE // 2
+            cy = HEIGHT * CELL_SIZE // 2
+
+           
+            self.canvas.create_rectangle(
+                cx - 160, cy - 30, cx + 160, cy + 30,
+                fill="#2c3e50", outline="#2ecc71", width=2
+            )
+            
+            self.canvas.create_text(
+                cx, cy,
+                text="ВЫХОД НАЙДЕН!", fill="#2ecc71", font=("Arial", 26, "bold")
+            )
+            return
+
+        
+        right_dir = (self.direction + 1) % 4
+        rx, ry = self.get_coords(self.rx, self.ry, right_dir)
+
+        if self.maze[ry][rx] == 0:
+            self.direction = right_dir
+            self.rx, self.ry = rx, ry
+        else:
+            fx, fy = self.get_coords(self.rx, self.ry, self.direction)
+            if self.maze[fy][fx] == 0:
+                self.rx, self.ry = fx, fy
+            else:
+                self.direction = (self.direction - 1) % 4
+
+        
+        x1 = self.rx * CELL_SIZE + 8
+        y1 = self.ry * CELL_SIZE + 8
+        x2 = (self.rx + 1) * CELL_SIZE - 8
+        y2 = (self.ry + 1) * CELL_SIZE - 8
+        self.canvas.coords(self.bug_id, x1, y1, x2, y2)
+        self.after_id = self.root.after(120, self.move_bug)
+
+
+if __name__ == "__main__":
+    window = tk.Tk()
+    game = CockroachMaze(window)
+    window.mainloop()
