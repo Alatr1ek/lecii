@@ -1,0 +1,108 @@
+import tkinter as tk
+from tkinter import messagebox
+from collections import Counter
+
+
+class Contract:
+    def __init__(self, machine, customer, cost):
+        self.machine = machine
+        self.customer = customer
+        self.cost = cost
+
+    @staticmethod
+    def parse(line):
+        p = line.split(",")
+        if len(p) != 3:
+            return None
+        if not p[0].strip() or not p[1].strip():
+            return None
+        try:
+            cost = float(p[2])
+        except:
+            return None
+        if cost < 0:
+            return None
+        return Contract(p[0].strip(), p[1].strip(), cost)
+
+    def __str__(self):
+        return f"{self.machine} | {self.customer} | {self.cost}"
+
+
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Договоры")
+        self.geometry("700x500")
+
+        self.contracts = []
+        self.errors = []
+
+        tk.Button(self, text="Загрузить", command=self.load).pack(pady=3)
+        tk.Button(self, text="По станкам",
+                  command=lambda: self.diagram("machine")).pack(pady=3)
+        tk.Button(self, text="По заказчикам",
+                  command=lambda: self.diagram("customer")).pack(pady=3)
+
+        self.listbox = tk.Listbox(self, font=("Consolas", 10))
+        self.listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.load()
+
+    def load(self):
+        self.contracts = []
+        self.errors = []
+        try:
+            f = open("contracts.txt", encoding="utf-8")
+            lines = f.readlines()
+            f.close()
+        except:
+            messagebox.showerror("Ошибка", "Нет файла contracts.txt")
+            return
+
+        for i, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+            c = Contract.parse(line)
+            if c is None:
+                self.errors.append(f"Строка {i}: {line}")
+            else:
+                self.contracts.append(c)
+
+        self.listbox.delete(0, tk.END)
+        for c in self.contracts:
+            self.listbox.insert(tk.END, str(c))
+
+        if self.errors:
+            messagebox.showwarning("Ошибки", "\n".join(self.errors))
+
+    def diagram(self, field):
+        if not self.contracts:
+            return
+
+        counts = Counter(getattr(c, field) for c in self.contracts)
+        total = sum(counts.values())
+
+        win = tk.Toplevel(self)
+        win.title("Диаграмма")
+        canvas = tk.Canvas(win, width=600, height=400, bg="white")
+        canvas.pack()
+
+        colors = ["red", "green", "blue", "orange", "purple",
+                  "cyan", "magenta", "yellow", "brown", "pink"]
+
+        start = 90
+        for i, (name, cnt) in enumerate(counts.items()):
+            extent = cnt / total * 360
+            color = colors[i % len(colors)]
+            canvas.create_arc(50, 50, 300, 300, start=start, extent=-extent,
+                              fill=color, outline="white")
+            start -= extent
+            y = 60 + i * 25
+            canvas.create_rectangle(340, y, 360, y + 18,
+                                    fill=color, outline="black")
+            canvas.create_text(370, y + 9, anchor="w",
+                               text=f"{name}: {cnt} ({cnt/total*100:.0f}%)")
+
+
+App().mainloop()
